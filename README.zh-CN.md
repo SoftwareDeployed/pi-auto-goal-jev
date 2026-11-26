@@ -65,7 +65,7 @@ pi install npm:pi-auto-goal
 | `enabled` | `true` | 总开关；关闭后不产生任何判定调用。 |
 | `model` | `""` | 判定模型，格式 `provider/modelId`；留空则复用当前会话模型。可直接在 `/config:auto-goal` 菜单里选，或用 `/config:auto-goal model <provider/modelId>` 指定。 |
 
-本分支还支持把 **Pi 的决策模型**用作 `model`，例如 `typesafe/jev-latest`（需要该 provider 的 API key，如 `TYPESAFE_API_KEY` 或 `/login typesafe`）。决策模型回答类型化问题而不写文本，所以判定在一次 `classify()` 调用里问两个问题：agent 能否停下、适用哪条规则。结论采用模型给出的置信度，催促里会写明命中的规则。决策模型不出现在面板的模型列表里，用 `/config:auto-goal model typesafe/jev-latest` 或直接改配置指定；`judgeMaxTokens` 与截断重试对它不生效。
+本分支还支持把 **Pi 的决策模型**用作 `model`，例如 `typesafe/jev-latest`（需要该 provider 的 API key，如 `TYPESAFE_API_KEY` 或 `/login typesafe`）。决策模型回答类型化问题而不写文本，所以判定在一次 `classify()` 调用里问两个问题：agent 能否停下、适用哪条规则。结论的置信度是模型所选选项的概率，催促里会写明命中的规则。决策模型不出现在面板的模型列表里，用 `/config:auto-goal model typesafe/jev-latest` 或直接改配置指定；`judgeMaxTokens` 与截断重试对它不生效。
 | `maxAutoContinues` | `2` | 同一条用户请求允许的自动干预次数；`0` 表示不限制。 |
 | `confidenceThreshold` | `0.6` | 触发干预所需的最低置信度。 |
 | `timeoutSeconds` | `30` | 判定请求超时；超时只报告，不当成可以停止。 |
