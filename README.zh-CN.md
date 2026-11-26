@@ -140,4 +140,4 @@ npm run check
 
 ## 分支说明
 
-本仓库是 `maplezzk/pi-extensions` 中 [`packages/pi-auto-goal`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) 的分支，保留了提交历史。只增加了一个功能：用 Pi 的决策模型判定；其余部分以跟随上游为准。用 `pi install git:github.com/brianwk/pi-auto-goal-jev` 安装。
+本仓库是 `maplezzk/pi-extensions` 中 [`packages/pi-auto-goal`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) 的分支，保留了提交历史。只增加了一个功能：用 Pi 的决策模型判定；其余部分以跟随上游为准。用 `pi install git:github.com/SoftwareDeployed/pi-auto-goal-jev` 安装。

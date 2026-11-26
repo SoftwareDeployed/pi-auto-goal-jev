@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.0-jev.1](https://github.com/brianwk/pi-auto-goal-jev) (2026-11-26)
+## [0.7.0-jev.1](https://github.com/SoftwareDeployed/pi-auto-goal-jev) (2026-11-26)
 
 Fork of [`maplezzk/pi-extensions`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) `packages/pi-auto-goal` at 0.7.0, with its commit history.
 

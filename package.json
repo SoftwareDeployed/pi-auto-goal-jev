@@ -37,11 +37,11 @@
   },
   "license": "MIT",
   "author": "maplezzk",
-  "homepage": "https://github.com/brianwk/pi-auto-goal-jev",
-  "bugs": "https://github.com/brianwk/pi-auto-goal-jev/issues",
+  "homepage": "https://github.com/SoftwareDeployed/pi-auto-goal-jev",
+  "bugs": "https://github.com/SoftwareDeployed/pi-auto-goal-jev/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brianwk/pi-auto-goal-jev.git"
+    "url": "git+https://github.com/SoftwareDeployed/pi-auto-goal-jev.git"
   },
   "publishConfig": {
     "access": "public",

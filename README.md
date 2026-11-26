@@ -139,4 +139,4 @@ Tests are deterministic: judge calls are injected, so no API key or live model i
 
 ## Fork notes
 
-This repository is a fork of [`packages/pi-auto-goal`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) in `maplezzk/pi-extensions`, extracted with its commit history. It adds one feature, judging with a Pi decision model, and is otherwise intended to track upstream. Install it for Pi with `pi install git:github.com/brianwk/pi-auto-goal-jev`.
+This repository is a fork of [`packages/pi-auto-goal`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) in `maplezzk/pi-extensions`, extracted with its commit history. It adds one feature, judging with a Pi decision model, and is otherwise intended to track upstream. Install it for Pi with `pi install git:github.com/SoftwareDeployed/pi-auto-goal-jev`.
