@@ -4,6 +4,7 @@ import { DEFAULT_AUTO_GOAL_CONFIG, type AutoGoalConfig } from "../src/config.ts"
 import { evaluateStop, STOP_SKIP_BUDGET, STOP_SKIP_CANCELED } from "../src/evaluate.ts";
 import type { StopVerdict, StopVerdictRequester } from "../src/verdict.ts";
 import type { TurnSnapshot } from "../src/session-context.ts";
+import { i18n } from "../src/i18n.ts";
 
 /** 判定输入快照。 */
 const SNAPSHOT: TurnSnapshot = {
@@ -84,7 +85,8 @@ test("受控实验：强制判定为提前停止，不调用模型并直接催�
   assert.equal(outcome.kind, "continue");
   if (outcome.kind !== "continue") return;
   assert.match(outcome.reason, /强制判定为提前停止|forced/);
-  assert.equal(outcome.message, "请按此补齐：受控实验：强制判定为提前停止");
+  // 文案跟随当前语言，测试不依赖某一种语言的固定字符串。
+  assert.equal(outcome.message, `请按此补齐：${i18n.t("forcedDecisionContinueReason")}`);
   assert.equal(outcome.budget, "1/2");
   assert.equal(outcome.confidence, 1);
 });

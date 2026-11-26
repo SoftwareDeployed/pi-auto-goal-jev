@@ -9,6 +9,7 @@ import {
   type JudgeRequest,
 } from "../src/verdict.ts";
 import type { TurnSnapshot } from "../src/session-context.ts";
+import { i18n } from "../src/i18n.ts";
 
 /** 固定的判定输入快照。 */
 const SNAPSHOT: TurnSnapshot = {
@@ -123,8 +124,9 @@ test("判定提示词把「输出里在等后台任务」列为可以停止", ()
 
 test("空输出与空工具轨迹使用占位文案", () => {
   const user = buildJudgeUserPrompt({ userRequest: "任务", userAnswers: [], finalOutput: "", toolTrace: [] });
-  assert.match(user, /\(agent 没有任何文本输出\)|（agent 没有任何文本输出）/);
-  assert.match(user, /\(本轮没有任何工具调用\)|（本轮没有任何工具调用）/);
+  // 占位文案跟随当前语言，测试不依赖某一种语言的固定字符串。
+  assert.ok(user.includes(i18n.t("judgeFinalOutputEmpty")));
+  assert.ok(user.includes(i18n.t("judgeToolTraceEmpty")));
 });
 
 test("未收集工具轨迹时写明原因，不冒充「本轮没有工具调用」", () => {

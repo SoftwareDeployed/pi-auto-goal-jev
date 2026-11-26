@@ -28,6 +28,22 @@ const TRUNCATION_RETRY_MULTIPLIER = 2;
 /** Pi 的模型对象类型；对外暴露以便调用方构造判定来源。 */
 export type PiModel = Parameters<typeof completeSimple>[0];
 
+/** Pi 把决策模型标成这个类型；它们不生成文本，只回答类型化问题。 */
+const CLASSIFIER_MODEL_TYPE = "classifier";
+/** 交给决策模型的两个问题：是否可以停下，以及适用哪条规则；答案按名字取回。 */
+const DECISION_QUESTION = "decision";
+const RULE_QUESTION = "rule";
+/** 规则里「可以停下」的五条与「必须继续」的六条；键名对应 locales 里的 judgeRule* 文案。 */
+const STOP_RULES = ["request_complete", "needs_user", "blocked", "question_answered", "waiting_background"];
+const CONTINUE_RULES = [
+  "partial",
+  "plan_not_executed",
+  "offered_to_continue",
+  "unverified_claim",
+  "unrequested_confirmation",
+  "change_only_restated",
+];
+
 /** 鉴权结果；ok 为 false 时判定不可执行。与共享请求器的鉴权结果同形，避免两处定义漂移。 */
 export type JudgeAuth = ModelRequestAuth;
 
@@ -44,10 +60,63 @@ export interface JudgeModelResolution<T> {
   findModel: (provider: string, modelId: string) => T | undefined;
 }
 
-/** 判定模型来源：决定用哪个模型、如何鉴权；测试可以直接构造。 */
+/** 决策模型收到的问题：在给定的选项里选一个。 */
+export interface JudgeChoiceQuestion {
+  type: "choice";
+  instructions: string;
+  criteria: Record<string, string>;
+}
+
+/**
+ * modelRegistry 上与决策模型有关的两个方法。较新的 Pi 才提供，本包的类型检查
+ * 钉在较旧的 Pi 类型上，所以按结构声明并保留「可能不存在」，运行时再确认。
+ */
+interface DecisionRegistry {
+  findOfType?: (type: "classifier", provider: string, modelId: string) => unknown;
+  classify?: (model: unknown, context: unknown, options?: unknown) => Promise<JudgeDecisionResult>;
+}
+
+/** 决策模型答案的最小结构；完整类型见 pi-ai 的 ClassifierResult。 */
+export interface JudgeDecisionResult {
+  provider: string;
+  model: string;
+  answers: Record<
+    string,
+    {
+      type: string;
+      choice?: string;
+      confidence?: number;
+      probabilities?: Record<string, number>;
+      [field: string]: unknown;
+    }
+  >;
+  stopReason: string;
+  errorMessage?: string;
+}
+
+/**
+ * 决策模型调用契约：默认接 Pi 的 ctx.modelRegistry.classify，
+ * 它与 completion 一样使用已配置的 provider 并解析鉴权；测试可替换。
+ */
+export type JudgeClassifier = (
+  model: PiModel,
+  context: {
+    state: Record<string, unknown>;
+    questions: Record<string, JudgeChoiceQuestion>;
+  },
+  options: {
+    apiKey?: string;
+    headers?: NonNullable<Extract<JudgeAuth, { ok: true }>["headers"]>;
+    signal?: AbortSignal;
+  },
+) => Promise<JudgeDecisionResult>;
+
+/** 判定模型来源：决定用哪个模型、如何鉴权、如何调用决策模型；测试可以直接构造。 */
 export interface JudgeModelSource extends JudgeModelResolution<PiModel> {
   /** 取指定模型的鉴权信息。 */
   resolveAuth: (model: PiModel) => Promise<JudgeAuth>;
+  /** 调用决策模型；只在配置的模型是 classifier 类型时用到，可以为空。 */
+  classify?: JudgeClassifier;
 }
 
 /** 底层 completion 契约；Pi 的 complete 与测试替身都实现它。 */
@@ -64,8 +133,9 @@ export type JudgeCompletion = (options: {
   maxTokens: number;
   /** 中止信号。 */
   signal?: AbortSignal;
+  /** 决策模型调用；模型是 classifier 类型时必须有。 */
+  classify?: JudgeClassifier;
 }) => Promise<JudgeResponse>;
-
 
 /** 拼接响应里的文本块，忽略思考块与工具调用块。 */
 function extractResponseText(content: ReadonlyArray<{ type: string; text?: string }>): string {
@@ -82,9 +152,120 @@ function summarizeParts(
   return content.map((part) => `${part.type}:${(part.text ?? part.thinking ?? "").length}`);
 }
 
+/** 模型是否为 Pi 的决策模型（classifier 类型）。 */
+export function isDecisionModel(model: PiModel): boolean {
+  return (model as { type?: unknown }).type === CLASSIFIER_MODEL_TYPE;
+}
+
+function formatProbability(value: number | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "n/a";
+}
+
+/** 交给决策模型挑选的规则清单，文案与提示词里的规则一一对应。 */
+function ruleCriteria(): Record<string, string> {
+  return {
+    request_complete: i18n.t("judgeRuleRequestComplete"),
+    needs_user: i18n.t("judgeRuleNeedsUser"),
+    blocked: i18n.t("judgeRuleBlocked"),
+    question_answered: i18n.t("judgeRuleQuestionAnswered"),
+    waiting_background: i18n.t("judgeRuleWaitingBackground"),
+    partial: i18n.t("judgeRulePartial"),
+    plan_not_executed: i18n.t("judgeRulePlanNotExecuted"),
+    offered_to_continue: i18n.t("judgeRuleOfferedToContinue"),
+    unverified_claim: i18n.t("judgeRuleUnverifiedClaim"),
+    unrequested_confirmation: i18n.t("judgeRuleUnrequestedConfirmation"),
+    change_only_restated: i18n.t("judgeRuleChangeOnlyRestated"),
+  };
+}
+
+/**
+ * 用决策模型判定：把同一套判定规则作为状态交给它，
+ * 让它在 stop / continue 两个选项里选一个，并指出适用哪条规则，
+ * 再把两个答案换算成判定流程期望的 JSON 文本。
+ * 决策模型不写理由：催促里的「还差什么」取自它选中的规则；
+ * 所选规则与结论矛盾时不用它，改用概括的说法，避免催促带着错误的原因。
+ */
+async function decisionJudgeCompletion(options: {
+  model: PiModel;
+  systemPrompt: string;
+  userPrompt: string;
+  auth: Extract<JudgeAuth, { ok: true }>;
+  classify: JudgeClassifier;
+  signal?: AbortSignal;
+}): Promise<JudgeResponse> {
+  const { model, systemPrompt, userPrompt, auth, classify, signal } = options;
+  const result = await classify(
+    model,
+    {
+      state: { rules: systemPrompt, turn: userPrompt },
+      questions: {
+        [DECISION_QUESTION]: {
+          type: "choice",
+          instructions: i18n.t("judgeDecisionInstructions"),
+          criteria: {
+            stop: i18n.t("judgeCriterionStop"),
+            continue: i18n.t("judgeCriterionContinue"),
+          },
+        },
+        [RULE_QUESTION]: {
+          type: "choice",
+          instructions: i18n.t("judgeRuleInstructions"),
+          criteria: ruleCriteria(),
+        },
+      },
+    },
+    { apiKey: auth.apiKey, headers: auth.headers, signal },
+  );
+  const answer = result.answers[DECISION_QUESTION];
+  if (result.stopReason !== "stop" || answer?.type !== "choice" || typeof answer.choice !== "string") {
+    return {
+      text: "",
+      stopReason: result.stopReason,
+      errorMessage:
+        result.errorMessage ??
+        i18n.t("judgeDecisionNoChoice", { answer: answer?.type ?? "none" }),
+      partTypes: [`decision:${answer?.type ?? "none"}`],
+    };
+  }
+  const decision = answer.choice;
+  const probabilities = answer.probabilities ?? {};
+  const confidence = Number.isFinite(answer.confidence)
+    ? (answer.confidence as number)
+    : (probabilities[decision] ?? 0);
+
+  const ruleAnswer = result.answers[RULE_QUESTION];
+  const ruleKey =
+    ruleAnswer?.type === "choice" && typeof ruleAnswer.choice === "string" ? ruleAnswer.choice : undefined;
+  const rules = ruleCriteria();
+  const consistent =
+    ruleKey !== undefined &&
+    rules[ruleKey] !== undefined &&
+    (decision === "continue" ? CONTINUE_RULES.includes(ruleKey) : STOP_RULES.includes(ruleKey));
+  const rule = consistent
+    ? rules[ruleKey]
+    : decision === "continue"
+      ? i18n.t("judgeDecisionRuleUnknown")
+      : i18n.t("judgeDecisionStopGeneric");
+
+  const detail = {
+    rule,
+    stop: formatProbability(probabilities.stop),
+    continue: formatProbability(probabilities.continue),
+  };
+  const reason =
+    decision === "continue"
+      ? i18n.t("judgeDecisionContinueReason", detail)
+      : i18n.t("judgeDecisionStopReason", detail);
+  return {
+    text: JSON.stringify({ decision, confidence, reason }),
+    stopReason: "stop",
+    partTypes: ["decision:choice", `rule:${ruleKey ?? "none"}`],
+  };
+}
+
 /**
  * 解析要使用的判定模型：配置了 model 就按 provider/modelId 查找，否则用当前会话模型。
- * 泛型形式便于用简单值测试解析逻辑，无需构造真实模型对象。
+ * 泛型形式便于用简单值验证解析逻辑，无需构造真实模型对象。
  */
 export function resolveJudgeModel<T>(source: JudgeModelResolution<T>): T | undefined {
   const configured = source.configuredModel.trim();
@@ -95,23 +276,39 @@ export function resolveJudgeModel<T>(source: JudgeModelResolution<T>): T | undef
 
 /**
  * 把 Pi 的扩展上下文包装成判定模型来源。
- * 鉴权与 provider 会话头统一走共享请求器，判定流程只拿到已备好的请求头。
+ * 鉴权与 provider 会话头统一走共享请求器，判定流程只拿到已备好的请求头；
+ * 决策模型走 Pi 的 modelRegistry，与 completion 一样能用已配置的 provider。
  */
 export function createJudgeModelSource(
   ctx: Pick<ExtensionContext, "model" | "modelRegistry" | "sessionManager">,
   config: AutoGoalConfig,
 ): JudgeModelSource {
+  const registry = ctx.modelRegistry as unknown as DecisionRegistry;
   return {
     configuredModel: config.model,
     sessionModel: ctx.model,
-    findModel: (provider: string, modelId: string) => ctx.modelRegistry.find(provider, modelId),
+    // find() 只查对话模型；决策模型要用 findOfType 才能找到。
+    findModel: (provider: string, modelId: string) =>
+      ctx.modelRegistry.find(provider, modelId) ??
+      (typeof registry.findOfType === "function"
+        ? (registry.findOfType("classifier", provider, modelId) as PiModel | undefined)
+        : undefined),
     resolveAuth: (model: PiModel) => resolveModelRequestAuth(ctx, model),
+    classify: (model, context, options) => {
+      // 旧版 Pi 的 modelRegistry 没有 classify：明确报错，不静默换模型。
+      if (typeof registry.classify !== "function") {
+        const reference = `${(model as { provider?: string }).provider ?? ""}/${(model as { id?: string }).id ?? ""}`;
+        return Promise.reject(new Error(i18n.t("judgeClassifierUnavailable", { model: reference })));
+      }
+      return registry.classify(model, context, options);
+    },
   };
 }
 
 /**
- * 默认 completion：用 Pi 的 completeSimple 发一次判定请求。
- * 这里固定使用 Pi 的 completeSimple；需要替换实现时注入自己的 JudgeCompletion。
+ * 默认 completion：用 Pi 的 completeSimple 发一次判定请求；
+ * 模型是决策模型时改走 classify。
+ * 这里固定使用 Pi 的调用；需要替换实现时注入自己的 JudgeCompletion。
  */
 export const piJudgeCompletion: JudgeCompletion = async ({
   model,
@@ -120,10 +317,29 @@ export const piJudgeCompletion: JudgeCompletion = async ({
   auth,
   maxTokens,
   signal,
+  classify,
 }) => {
+  // 鉴权解析出 baseUrl 时按 Pi 核心的方式覆盖模型地址。
+  const target = auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
+  if (isDecisionModel(target)) {
+    if (!classify) {
+      throw new Error(
+        i18n.t("judgeClassifierUnavailable", {
+          model: `${(model as { provider?: string }).provider ?? ""}/${(model as { id?: string }).id ?? ""}`,
+        }),
+      );
+    }
+    return decisionJudgeCompletion({
+      model: target,
+      systemPrompt,
+      userPrompt,
+      auth,
+      classify,
+      signal,
+    });
+  }
   const response = await completeSimple(
-    // 鉴权解析出 baseUrl 时按 Pi 核心的方式覆盖模型地址。
-    auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model,
+    target,
     {
       systemPrompt,
       messages: [{
@@ -166,6 +382,7 @@ function isTruncatedWithoutText(response: JudgeResponse): boolean {
  * 用判定模型来源与 completion 组装判定调用。
  * 模型不存在或鉴权失败时直接抛错，由上层报告给用户，不静默跳过；
  * 输出被截断且没有文本时，加大预算重试一次，避免一次偶发的截断就丢掉判定。
+ * 决策模型没有输出预算，也不走这条重试。
  */
 export function createJudgeModelInvoker(options: {
   /** 模型来源。 */
@@ -192,10 +409,12 @@ export function createJudgeModelInvoker(options: {
       userPrompt: buildJudgeUserPrompt(snapshot),
       auth,
       signal,
+      classify: source.classify,
     };
-    const maxTokens = resolveJudgeMaxTokens(model, options.maxTokens ?? model.maxTokens);
+    const decisionModel = isDecisionModel(model);
+    const maxTokens = decisionModel ? 0 : resolveJudgeMaxTokens(model, options.maxTokens ?? model.maxTokens);
     const response = await completion({ ...request, maxTokens });
-    if (!isTruncatedWithoutText(response)) return response;
+    if (decisionModel || !isTruncatedWithoutText(response)) return response;
 
     const retryMaxTokens = resolveJudgeMaxTokens(model, maxTokens * TRUNCATION_RETRY_MULTIPLIER);
     if (retryMaxTokens <= maxTokens) return response;
