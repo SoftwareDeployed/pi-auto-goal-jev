@@ -1,6 +1,6 @@
 {
   "name": "pi-auto-goal",
-  "version": "0.7.0",
+  "version": "0.7.0-jev.1",
   "description": "Pi stop guard: judges premature agent stops with a second model and continues the task",
   "type": "module",
   "main": "./index.ts",
@@ -14,7 +14,8 @@
     "config.example.json",
     "README.md",
     "README.zh-CN.md",
-    "SKILL.md"
+    "SKILL.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
@@ -36,12 +37,11 @@
   },
   "license": "MIT",
   "author": "maplezzk",
-  "homepage": "https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal",
-  "bugs": "https://github.com/maplezzk/pi-extensions/issues",
+  "homepage": "https://github.com/brianwk/pi-auto-goal-jev",
+  "bugs": "https://github.com/brianwk/pi-auto-goal-jev/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maplezzk/pi-extensions.git",
-    "directory": "packages/pi-auto-goal"
+    "url": "git+https://github.com/brianwk/pi-auto-goal-jev.git"
   },
   "publishConfig": {
     "access": "public",
@@ -54,7 +54,9 @@
     "coding-agent",
     "auto-continue",
     "stop-guard",
-    "agent-supervision"
+    "agent-supervision",
+    "decision-model",
+    "jev"
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.80.0",

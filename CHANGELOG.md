@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0-jev.1](https://github.com/brianwk/pi-auto-goal-jev) (2026-11-26)
+
+Fork of [`maplezzk/pi-extensions`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) `packages/pi-auto-goal` at 0.7.0, with its commit history.
+
+### Features
+
+* Judge with a Pi decision model (classifier type, for example `typesafe/jev-latest`): one `classify()` call asks whether the agent may stop and which rule applies; the verdict uses the model's confidence and the nudge names the rule.
+
+### Tests
+
+* Placeholder and forced-decision text is checked against the active language instead of fixed Chinese strings, so the suite passes under any locale.
 ## [0.7.0](https://github.com/maplezzk/pi-extensions/compare/pi-auto-goal-v0.6.3...pi-auto-goal-v0.7.0) (2026-10-05)
 
 

@@ -64,6 +64,8 @@ File: `<pi-agent-dir>/extensions/pi-auto-goal/config.json`; respects `PI_CODING_
 | --- | --- | --- |
 | `enabled` | `true` | Master switch; when false no judge call is made. |
 | `model` | `""` | Judge model as `provider/modelId`; empty reuses the current session model. Pick it from the `/config:auto-goal` menu, or set it with `/config:auto-goal model <provider/modelId>`. |
+
+This fork also accepts a **Pi decision model** as `model`, for example `typesafe/jev-latest` (needs that provider's API key, such as `TYPESAFE_API_KEY` or `/login typesafe`). Decision models answer typed questions instead of writing text, so the judge asks two in one `classify()` call: may the agent stop, and which rule applies. The verdict uses the model's confidence, and the nudge names the rule it picked. Decision models are not listed in the panel's model picker; set them with `/config:auto-goal model typesafe/jev-latest` or the config file. `judgeMaxTokens` and the truncation retry do not apply to them.
 | `maxAutoContinues` | `2` | Interventions per user request; `0` means unlimited. |
 | `confidenceThreshold` | `0.6` | Minimum confidence required to intervene. |
 | `timeoutSeconds` | `30` | Judge request timeout; a timeout is reported, not treated as a stop. |
@@ -134,3 +136,7 @@ npm run check
 ```
 
 Tests are deterministic: judge calls are injected, so no API key or live model is required.
+
+## Fork notes
+
+This repository is a fork of [`packages/pi-auto-goal`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) in `maplezzk/pi-extensions`, extracted with its commit history. It adds one feature, judging with a Pi decision model, and is otherwise intended to track upstream. Install it for Pi with `pi install git:github.com/brianwk/pi-auto-goal-jev`.
