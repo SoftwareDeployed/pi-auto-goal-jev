@@ -181,15 +181,25 @@ test("决策模型：所选规则与结论矛盾时不用它，改用概括的�
   assert.doesNotMatch(second?.reason ?? "", /Only part of a multi-step request|多步请求只完成了一部分/);
 });
 
-test("决策模型：没有置信度时取所选选项的概率", async () => {
+test("决策模型：置信度取所选选项的概率，而不是分布集中度", async () => {
+  // 两选项时模型的 confidence 是 2 x P(top) - 1：0.36 对应 0.68。直接用它会把阈值翻倍。
   const { classify } = capturingClassifier({
-    decision: { type: "choice", choice: "continue", probabilities: { stop: 0.3, continue: 0.7 } },
+    decision: { type: "choice", choice: "continue", confidence: 0.36, probabilities: { stop: 0.32, continue: 0.68 } },
     rule: { type: "choice", choice: "partial" },
   });
-  const verdict = parseJudgeVerdict(
-    (await createJudgeModelInvoker({ source: decisionSource(classify) })({ snapshot: SNAPSHOT, signal: undefined })).text,
+  const invoke = createJudgeModelInvoker({ source: decisionSource(classify) });
+  const verdict = parseJudgeVerdict((await invoke({ snapshot: SNAPSHOT, signal: undefined })).text);
+  assert.equal(verdict?.confidence, 0.68);
+
+  // 没有概率时，从集中度换算回概率。
+  const marginOnly = capturingClassifier({
+    decision: { type: "choice", choice: "stop", confidence: 0.5 },
+    rule: { type: "choice", choice: "blocked" },
+  });
+  const fromMargin = parseJudgeVerdict(
+    (await createJudgeModelInvoker({ source: decisionSource(marginOnly.classify) })({ snapshot: SNAPSHOT, signal: undefined })).text,
   );
-  assert.equal(verdict?.confidence, 0.7);
+  assert.equal(fromMargin?.confidence, 0.75);
 });
 
 test("决策模型：出错或没有返回选择时按失败上报，不算作判定", async () => {

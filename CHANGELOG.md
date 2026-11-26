@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0-jev.2](https://github.com/SoftwareDeployed/pi-auto-goal-jev) (2026-11-26)
+
+### Bug Fixes
+
+* The verdict's confidence is now the probability of the option the decision model chose. It used to be the model's `confidence`, which measures how concentrated the distribution is (for two options, 2 x P(top) - 1), so `confidenceThreshold` effectively required 80% certainty instead of 60% and some premature stops were accepted.
 ## [0.7.0-jev.1](https://github.com/SoftwareDeployed/pi-auto-goal-jev) (2026-11-26)
 
 Fork of [`maplezzk/pi-extensions`](https://github.com/maplezzk/pi-extensions/tree/main/packages/pi-auto-goal) `packages/pi-auto-goal` at 0.7.0, with its commit history.

@@ -229,9 +229,17 @@ async function decisionJudgeCompletion(options: {
   }
   const decision = answer.choice;
   const probabilities = answer.probabilities ?? {};
-  const confidence = Number.isFinite(answer.confidence)
-    ? (answer.confidence as number)
-    : (probabilities[decision] ?? 0);
+  /* The plugin's threshold is a probability ("confidence is your certainty,
+     from 0 to 1"), but a decision model's `confidence` is how concentrated the
+     distribution is: for two options, 2 x P(top) - 1. Using it raw would double
+     the bar, so the certainty is the probability of the chosen option. */
+  const probability = probabilities[decision];
+  const confidence =
+    typeof probability === "number" && Number.isFinite(probability)
+      ? probability
+      : typeof answer.confidence === "number" && Number.isFinite(answer.confidence)
+        ? (answer.confidence + 1) / 2
+        : 0;
 
   const ruleAnswer = result.answers[RULE_QUESTION];
   const ruleKey =
